@@ -30,6 +30,8 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import com.example.lab_week_09.ui.theme.LAB_WEEK_09Theme
 import com.example.lab_week_09.ui.theme.OnBackgroundItemText
 import com.example.lab_week_09.ui.theme.OnBackgroundTitleText
@@ -148,12 +150,25 @@ fun Home(
             inputField.value = inputField.value.copy(name = newText)
         },
         onButtonClick = {
-            listData.add(inputField.value)
-            inputField.value = Student("")
+            if (inputField.value.name.isNotBlank()) {
+                listData.add(inputField.value)
+                inputField.value = Student("")
+            }
         },
         navigateFromHomeToResult = {
-            val names = listData.joinToString(", ") { it.name }
-            navigateFromHomeToResult(names)
+            // Create a Moshi instance and adapter for List<Student>
+            val moshi = Moshi.Builder()
+                .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+                .build()
+            val type = Types.newParameterizedType(List::class.java, Student::class.java)
+            val adapter = moshi.adapter<List<Student>>(type)
+
+            // Convert listData to JSON string
+            val json = adapter.toJson(listData)
+
+            // Navigate with JSON (encoded for safety)
+            navigateFromHomeToResult(java.net.URLEncoder.encode(json, "UTF-8"))
+
         }
     )
 }
@@ -211,18 +226,13 @@ fun Home(
                 )
                 Row {
                     PrimaryTextButton(
-                        text = stringResource(
-                            id =
-                                R.string.button_click
-                        )
+                        text = stringResource(id = R.string.button_click),
+                        enabled = inputField.name.isNotBlank()
                     ) {
                         onButtonClick()
                     }
                     PrimaryTextButton(
-                        text = stringResource(
-                            id =
-                                R.string.button_navigate
-                        )
+                        text = stringResource(id = R.string.button_navigate)
                     ) {
                         navigateFromHomeToResult()
                     }
@@ -246,13 +256,26 @@ fun Home(
 //then displays the value of listData to the screen
 @Composable
 fun ResultContent(listData: String) {
-    Column(
+    val moshi = Moshi.Builder()
+        .add(com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory())
+        .build()
+    val type = Types.newParameterizedType(List::class.java, Student::class.java)
+    val adapter = moshi.adapter<List<Student>>(type)
+
+    // Decode URL and parse JSON
+    val decodedJson = java.net.URLDecoder.decode(listData, "UTF-8")
+    val students = adapter.fromJson(decodedJson) ?: emptyList()
+
+    // Display the list using LazyColumn
+    LazyColumn(
         modifier = Modifier
-            .padding(vertical = 50.dp)
+            .padding(50.dp)
             .fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        //Here, we call the OnBackgroundItemText UI Element
-        OnBackgroundItemText(text = listData)
+        items(students) { student ->
+            OnBackgroundItemText(text = student.name)
+        }
     }
 }
+
